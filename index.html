@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>N-Queens Puzzle Game</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        /* Custom styles for the board and pieces */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f4f8; /* Light blue-gray background */
+        }
+        .board-container {
+            display: grid;
+            border: 2px solid #4a5568; /* Darker border for the board */
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            border-radius: 0.75rem; /* Rounded corners */
+            overflow: hidden; /* Ensures rounded corners apply to cells */
+        }
+        .cell {
+            width: 50px; /* Default cell size */
+            height: 50px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 2rem;
+            cursor: pointer;
+            transition: background-color 0.2s ease-in-out;
+            user-select: none; /* Prevent text selection */
+        }
+        /* Chessboard pattern */
+        .cell.light {
+            background-color: #f7fafc; /* Lighter cell */
+        }
+        .cell.dark {
+            background-color: #cbd5e0; /* Darker cell */
+        }
+        .cell:hover {
+            background-color: #e2e8f0; /* Hover effect */
+        }
+        .cell.has-queen {
+            color: #ef4444; /* Red for queen */
+        }
+        .cell.conflicting {
+            background-color: #fca5a5; /* Light red for conflicting cells */
+        }
+        .cell.conflicting.has-queen {
+            color: #b91c1c; /* Darker red for conflicting queen */
+        }
+
+        /* Responsive cell sizing */
+        @media (max-width: 640px) {
+            .cell {
+                width: 40px;
+                height: 40px;
+                font-size: 1.5rem;
+            }
+        }
+        @media (max-width: 480px) {
+            .cell {
+                width: 35px;
+                height: 35px;
+                font-size: 1.2rem;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-blue-100 to-purple-100 min-h-screen flex items-center justify-center p-4">
+    <div class="bg-white p-8 rounded-xl shadow-2xl max-w-lg w-full text-center space-y-6">
+        <h1 class="text-4xl font-extrabold text-gray-800 mb-4">N-Queens Puzzle</h1>
+
+        <div class="flex flex-col sm:flex-row items-center justify-center gap-4 mb-6">
+            <div class="flex items-center gap-2">
+                <label for="boardSize" class="text-lg font-semibold text-gray-700">Board Size (N):</label>
+                <select id="boardSize" class="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                    <option value="4">4</option>
+                    <option value="5">5</option>
+                    <option value="6">6</option>
+                    <option value="7">7</option>
+                    <option value="8" selected>8</option>
+                    <option value="9">9</option>
+                    <option value="10">10</option>
+                </select>
+            </div>
+            <button id="newGameBtn" class="px-6 py-2 bg-blue-600 text-white font-bold rounded-lg shadow-md hover:bg-blue-700 transition duration-300 transform hover:scale-105">
+                New Game
+            </button>
+            <button id="solveBtn" class="px-6 py-2 bg-purple-600 text-white font-bold rounded-lg shadow-md hover:bg-purple-700 transition duration-300 transform hover:scale-105">
+                Solve Puzzle
+            </button>
+        </div>
+
+        <div id="gameStatus" class="text-xl font-semibold text-gray-600 h-8 flex items-center justify-center">
+            Place <span id="queensToPlace" class="text-blue-600">8</span> queens.
+        </div>
+
+        <div id="chessboard" class="board-container mx-auto">
+            </div>
+
+        <div class="flex flex-col sm:flex-row items-center justify-center gap-4 mt-6">
+            <button id="getTipBtn" class="px-6 py-2 bg-emerald-600 text-white font-bold rounded-lg shadow-md hover:bg-emerald-700 transition duration-300 transform hover:scale-105">
+                ✨ Get Puzzle Tip
+            </button>
+            <button id="explainSolutionBtn" class="px-6 py-2 bg-orange-600 text-white font-bold rounded-lg shadow-md hover:bg-orange-700 transition duration-300 transform hover:scale-105 hidden">
+                ✨ Explain Solution
+            </button>
+        </div>
+
+        <div id="puzzleTipOutput" class="mt-4 p-4 bg-gray-50 rounded-lg text-gray-700 text-sm italic border border-gray-200 hidden">
+            </div>
+        <div id="solutionExplanationOutput" class="mt-4 p-4 bg-gray-50 rounded-lg text-gray-700 text-sm italic border border-gray-200 hidden">
+            </div>
+    </div>
+
+    <script>
+        // --- Game State Variables ---
+        let N = 8; // Default board size
+        let board = []; // 2D array representing the board (true if queen, false if empty)
+        let queensPlaced = 0; // Current number of queens placed
+        let solutionFound = false; // Flag to indicate if a solution has been found
+
+        // --- DOM Elements ---
+        const chessboardDiv = document.getElementById('chessboard');
+        const boardSizeSelect = document.getElementById('boardSize');
+        const newGameBtn = document.getElementById('newGameBtn');
+        const solveBtn = document.getElementById('solveBtn');
+        const gameStatusDiv = document.getElementById('gameStatus');
+        const queensToPlaceSpan = document.getElementById('queensToPlace');
+        const getTipBtn = document.getElementById('getTipBtn');
+        const explainSolutionBtn = document.getElementById('explainSolutionBtn');
+        const puzzleTipOutput = document.getElementById('puzzleTipOutput');
+        const solutionExplanationOutput = document.getElementById('solutionExplanationOutput');
+
+        // --- N-Queens Solver Logic (Backtracking Algorithm) ---
+        class NQueensSolver {
+            constructor(n) {
+                this.n = n;
+                this.currentBoard = new Array(n).fill(-1); // currentBoard[i] stores the column of the queen in row i
+                this.solutions = [];
+
+                // Helper arrays for O(1) conflict checking
+                this.colsTaken = new Array(n).fill(false);
+                this.diag1Taken = new Array(2 * n - 1).fill(false); // row + col
+                this.diag2Taken = new Array(2 * n - 1).fill(false); // row - col + n - 1
+            }
+
+            solve() {
+                this.solutions = []; // Clear previous solutions
+                this._solveRecursive(0);
+                return this.solutions;
+            }
+
+            _solveRecursive(row) {
+                if (row === this.n) {
+                    // All queens placed, add current configuration to solutions
+                    this.solutions.push([...this.currentBoard]); // Deep copy
+                    return;
+                }
+
+                for (let col = 0; col < this.n; col++) {
+                    if (this._isSafe(row, col)) {
+                        this._placeQueen(row, col);
+                        this._solveRecursive(row + 1);
+                        this._removeQueen(row, col); // Backtrack
+                    }
+                }
+            }
+
+            _isSafe(row, col) {
+                return !(this.colsTaken[col] ||
+                         this.diag1Taken[row + col] ||
+                         this.diag2Taken[row - col + this.n - 1]);
+            }
+
+            _placeQueen(row, col) {
+                this.currentBoard[row] = col;
+                this.colsTaken[col] = true;
+                this.diag1Taken[row + col] = true;
+                this.diag2Taken[row - col + this.n - 1] = true;
+            }
+
+            _removeQueen(row, col) {
+                this.currentBoard[row] = -1; // Mark as empty
+                this.colsTaken[col] = false;
+                this.diag1Taken[row + col] = false;
+                this.diag2Taken[row - col + this.n - 1] = false;
+            }
+        }
+
+        // --- Game Functions ---
+
+        /**
+         * Initializes a new game board and resets game state.
+         */
+        function initializeGame() {
+            N = parseInt(boardSizeSelect.value);
+            board = Array(N).fill(0).map(() => Array(N).fill(false)); // All cells empty
+            queensPlaced = 0;
+            solutionFound = false;
+            gameStatusDiv.textContent = `Place ${N} queens.`;
+            queensToPlaceSpan.textContent = N;
+            explainSolutionBtn.classList.add('hidden'); // Hide explain button
+            puzzleTipOutput.classList.add('hidden'); // Hide tip output
+            solutionExplanationOutput.classList.add('hidden'); // Hide explanation output
+            renderBoard();
+        }
+
+        /**
+         * Renders the chessboard dynamically based on the current N value and board state.
+         */
+        function renderBoard() {
+            chessboardDiv.innerHTML = ''; // Clear existing board
+            chessboardDiv.style.gridTemplateColumns = `repeat(${N}, 1fr)`; // Set grid columns dynamically
+
+            // Calculate cell size based on N to ensure it fits within the container
+            const maxBoardWidth = Math.min(chessboardDiv.parentElement.offsetWidth - 64, 500); // Max 500px or parent width - padding
+            const cellSize = Math.floor(maxBoardWidth / N);
+
+            for (let r = 0; r < N; r++) {
+                for (let c = 0; c < N; c++) {
+                    const cell = document.createElement('div');
+                    cell.classList.add('cell', (r + c) % 2 === 0 ? 'light' : 'dark');
+                    cell.dataset.row = r;
+                    cell.dataset.col = c;
+                    cell.style.width = `${cellSize}px`;
+                    cell.style.height = `${cellSize}px`;
+
+                    if (board[r][c]) {
+                        cell.classList.add('has-queen');
+                        cell.innerHTML = '<i class="fas fa-chess-queen"></i>'; // Font Awesome queen icon
+                    }
+
+                    cell.addEventListener('click', handleCellClick);
+                    chessboardDiv.appendChild(cell);
+                }
+            }
+            updateBoardVisuals();
+        }
+
+        /**
+         * Handles a click on a chessboard cell. Places or removes a queen.
+         * @param {Event} event The click event.
+         */
+        function handleCellClick(event) {
+            if (solutionFound) return; // Prevent interaction after solution is found
+
+            const row = parseInt(event.currentTarget.dataset.row);
+            const col = parseInt(event.currentTarget.dataset.col);
+
+            if (board[row][col]) {
+                // Remove queen
+                board[row][col] = false;
+                queensPlaced--;
+            } else {
+                // Place queen
+                board[row][col] = true;
+                queensPlaced++;
+            }
+            updateBoardVisuals();
+            checkWinCondition();
+        }
+
+        /**
+         * Updates the visual state of the board, highlighting conflicts.
+         */
+        function updateBoardVisuals() {
+            const cells = document.querySelectorAll('.cell');
+            const conflictingPositions = getConflictingQueens();
+
+            cells.forEach(cell => {
+                const r = parseInt(cell.dataset.row);
+                const c = parseInt(cell.dataset.col);
+
+                cell.classList.remove('has-queen', 'conflicting');
+                cell.innerHTML = '';
+
+                if (board[r][c]) {
+                    cell.classList.add('has-queen');
+                    cell.innerHTML = '<i class="fas fa-chess-queen"></i>';
+                }
+
+                if (conflictingPositions.has(`${r},${c}`)) {
+                    cell.classList.add('conflicting');
+                }
+            });
+
+            queensToPlaceSpan.textContent = Math.max(0, N - queensPlaced);
+            if (queensPlaced < N) {
+                 gameStatusDiv.textContent = `Place ${N - queensPlaced} more queens.`;
+            } else if (conflictingPositions.size > 0) {
+                gameStatusDiv.textContent = `Conflicts detected!`;
+            } else {
+                gameStatusDiv.textContent = `All ${N} queens placed. Checking...`;
+            }
+        }
+
+        /**
+         * Checks for conflicts among currently placed queens.
+         * Returns a Set of strings "row,col" for all conflicting queen positions.
+         */
+        function getConflictingQueens() {
+            const conflicts = new Set();
+            const placedQueens = [];
+
+            // Collect all placed queen positions
+            for (let r = 0; r < N; r++) {
+                for (let c = 0; c < N; c++) {
+                    if (board[r][c]) {
+                        placedQueens.push({ r, c });
+                    }
+                }
+            }
+
+            // Check each pair of queens for conflicts
+            for (let i = 0; i < placedQueens.length; i++) {
+                for (let j = i + 1; j < placedQueens.length; j++) {
+                    const q1 = placedQueens[i];
+                    const q2 = placedQueens[j];
+
+                    // Check same row, same column, or same diagonal
+                    if (q1.r === q2.r || q1.c === q2.c ||
+                        Math.abs(q1.r - q2.r) === Math.abs(q1.c - q2.c)) {
+                        conflicts.add(`${q1.r},${q1.c}`);
+                        conflicts.add(`${q2.r},${q2.c}`);
+                    }
+                }
+            }
+            return conflicts;
+        }
+
+        /**
+         * Checks if the player has successfully solved the puzzle.
+         */
+        function checkWinCondition() {
+            if (queensPlaced === N && getConflictingQueens().size === 0) {
+                gameStatusDiv.textContent = "CONGRATULATIONS! You solved the puzzle!";
+                gameStatusDiv.classList.add('text-green-600');
+                solutionFound = true;
+                explainSolutionBtn.classList.remove('hidden'); // Show explain button
+            } else {
+                gameStatusDiv.classList.remove('text-green-600');
+                explainSolutionBtn.classList.add('hidden'); // Hide explain button if not a solution
+                solutionExplanationOutput.classList.add('hidden'); // Hide explanation output
+            }
+        }
+
+        /**
+         * Uses the NQueensSolver to find and display one solution.
+         */
+        function solvePuzzle() {
+            const solver = new NQueensSolver(N);
+            const solutions = solver.solve();
+
+            if (solutions.length > 0) {
+                const firstSolution = solutions[0];
+                // Clear current board
+                board = Array(N).fill(0).map(() => Array(N).fill(false));
+                queensPlaced = 0;
+
+                // Place queens according to the first solution
+                for (let r = 0; r < N; r++) {
+                    const c = firstSolution[r];
+                    if (c !== -1) { // -1 means no queen in that row in solver's internal representation
+                        board[r][c] = true;
+                        queensPlaced++;
+                    }
+                }
+                solutionFound = true;
+                updateBoardVisuals();
+                gameStatusDiv.textContent = "Here's one solution!";
+                gameStatusDiv.classList.add('text-purple-600');
+                explainSolutionBtn.classList.remove('hidden'); // Show explain button
+            } else {
+                gameStatusDiv.textContent = "No solutions found for this board size.";
+                gameStatusDiv.classList.add('text-red-600');
+                explainSolutionBtn.classList.add('hidden'); // Hide explain button
+                solutionExplanationOutput.classList.add('hidden'); // Hide explanation output
+            }
+        }
+
+        // --- Gemini API Integration ---
+
+        /**
+         * Generic function to call the Gemini API.
+         * @param {string} prompt The text prompt for the LLM.
+         * @returns {Promise<string>} The generated text from the LLM.
+         */
+        async function callGeminiAPI(prompt) {
+            const chatHistory = [{ role: "user", parts: [{ text: prompt }] }];
+            const payload = { contents: chatHistory };
+            const apiKey = ""; // Leave this as-is; Canvas will provide the key at runtime.
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const result = await response.json();
+
+                if (result.candidates && result.candidates.length > 0 &&
+                    result.candidates[0].content && result.candidates[0].content.parts &&
+                    result.candidates[0].content.parts.length > 0) {
+                    return result.candidates[0].content.parts[0].text;
+                } else {
+                    console.error("Gemini API response structure unexpected:", result);
+                    return "Error: Could not get a response from the AI.";
+                }
+            } catch (error) {
+                console.error("Error calling Gemini API:", error);
+                return "Error: Failed to connect to the AI service.";
+            }
+        }
+
+        /**
+         * Generates and displays a puzzle-solving tip using the Gemini API.
+         */
+        async function getPuzzleTip() {
+            puzzleTipOutput.classList.remove('hidden');
+            puzzleTipOutput.innerHTML = '<div class="text-center text-gray-500">Generating tip...</div>';
+
+            const prompt = "Provide a concise, helpful tip or strategy for solving the N-Queens puzzle. Focus on general approaches or common pitfalls.";
+            const tip = await callGeminiAPI(prompt);
+            puzzleTipOutput.innerHTML = `<strong>Puzzle Tip:</strong> ${tip}`;
+        }
+
+        /**
+         * Explains the current solution on the board using the Gemini API.
+         */
+        async function explainSolution() {
+            if (!solutionFound) {
+                solutionExplanationOutput.classList.remove('hidden');
+                solutionExplanationOutput.innerHTML = '<div class="text-red-500">No valid solution to explain yet!</div>';
+                return;
+            }
+
+            solutionExplanationOutput.classList.remove('hidden');
+            solutionExplanationOutput.innerHTML = '<div class="text-center text-gray-500">Explaining solution...</div>';
+
+            // Format the current board state for the LLM
+            const placedQueens = [];
+            for (let r = 0; r < N; r++) {
+                for (let c = 0; c < N; c++) {
+                    if (board[r][c]) {
+                        placedQueens.push(`(Row ${r + 1}, Column ${c + 1})`);
+                    }
+                }
+            }
+            const boardStateString = placedQueens.join(', ');
+
+            const prompt = `The N-Queens puzzle board has queens placed at the following positions for an ${N}x${N} board: ${boardStateString}. Explain in simple terms why this specific arrangement is a valid solution, meaning no two queens attack each other horizontally, vertically, or diagonally.`;
+            const explanation = await callGeminiAPI(prompt);
+            solutionExplanationOutput.innerHTML = `<strong>Solution Explanation:</strong> ${explanation}`;
+        }
+
+        // --- Event Listeners ---
+        boardSizeSelect.addEventListener('change', initializeGame);
+        newGameBtn.addEventListener('click', initializeGame);
+        solveBtn.addEventListener('click', solvePuzzle);
+        getTipBtn.addEventListener('click', getPuzzleTip);
+        explainSolutionBtn.addEventListener('click', explainSolution);
+
+        // --- Initial Game Setup ---
+        initializeGame(); // Start the first game on page load
+    </script>
+</body>
+</html>
